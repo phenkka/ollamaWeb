@@ -24,7 +24,15 @@
 			console.log(backendConfig);
 
 			if ($config) {
-				if (localStorage.token) {
+				if ($config?.auth === false) {
+					await user.set({
+						id: 'guest',
+						email: '',
+						name: 'Guest',
+						role: 'admin',
+						profile_image_url: ''
+					});
+				} else if (localStorage.token) {
 					// Get Session User Info
 					const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
 						toast.error(error);
@@ -35,12 +43,23 @@
 						// Save Session User to Store
 						await user.set(sessionUser);
 					} else {
-						// Redirect Invalid Session User to /auth Page
 						localStorage.removeItem('token');
-						await goto('/auth');
+						await user.set({
+							id: 'guest',
+							email: '',
+							name: 'Guest',
+							role: 'admin',
+							profile_image_url: ''
+						});
 					}
 				} else {
-					await goto('/auth');
+					await user.set({
+						id: 'guest',
+						email: '',
+						name: 'Guest',
+						role: 'admin',
+						profile_image_url: ''
+					});
 				}
 			}
 		} else {

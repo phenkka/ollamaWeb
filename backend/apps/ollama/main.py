@@ -4,8 +4,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.concurrency import run_in_threadpool
 
 import requests
+import logging
 import json
 import uuid
+from typing import Optional
+from pathlib import Path
 from pydantic import BaseModel
 
 from apps.web.models.users import Users
@@ -24,10 +27,83 @@ app.add_middleware(
 
 app.state.OLLAMA_API_BASE_URL = OLLAMA_API_BASE_URL
 
+
+logger = logging.getLogger(__name__)
+
 # TARGET_SERVER_URL = OLLAMA_API_BASE_URL
 
 
 REQUEST_POOL = []
+
+
+_NEMO_RAILS = None
+
+
+def _load_nemo_guardrails():
+    global _NEMO_RAILS
+    if _NEMO_RAILS is not None:
+        return _NEMO_RAILS
+
+    try:
+        from nemoguardrails import RailsConfig, LLMRails
+
+        config_path = Path(__file__).resolve().parent / "nemo_guardrails"
+        cfg = RailsConfig.from_path(str(config_path))
+        _NEMO_RAILS = LLMRails(cfg)
+        return _NEMO_RAILS
+    except Exception:
+        _NEMO_RAILS = False
+        return _NEMO_RAILS
+
+
+def _nemo_input_check(user_message: str) -> Optional[str]:
+    rails = _load_nemo_guardrails()
+    if rails is False:
+        return None
+
+    if not isinstance(user_message, str) or user_message == "":
+        return None
+
+    try:
+        res = rails.generate(
+            messages=[{"role": "user", "content": user_message}],
+            options={"rails": ["input"]},
+        )
+        content = res.get("content") if isinstance(res, dict) else None
+        if not isinstance(content, str):
+            return None
+        if content != user_message:
+            return content
+        return None
+    except Exception:
+        return None
+
+
+def _maybe_fallback_ollama_base_url(url: str) -> Optional[str]:
+    if not isinstance(url, str) or url == "":
+        return None
+
+    if url.startswith("http://ollama:11434"):
+        return "http://host.docker.internal:11434/api"
+
+    return None
+
+
+def _guardrails_block_message(user_message: str) -> Optional[str]:
+    if not isinstance(user_message, str) or user_message == "":
+        return None
+
+    lowered = user_message.lower()
+    triggers = [
+        "ignore previous",
+        "игнорируй",
+        "забудь все правила",
+        "developer mode",
+    ]
+    if any(t in lowered for t in triggers):
+        return "Я не могу игнорировать правила или инструкции. Сформулируй вопрос без попыток обхода политики."
+
+    return None
 
 
 @app.get("/url")
@@ -87,11 +163,65 @@ async def proxy(path: str, request: Request, user=Depends(get_current_user)):
     r = None
 
     def get_request():
-        nonlocal r
+        nonlocal r, body, target_url
 
         request_id = str(uuid.uuid4())
         try:
             REQUEST_POOL.append(request_id)
+
+            if path in ["chat"] and request.method.upper() == "POST":
+                try:
+                    body_json = json.loads(body.decode("utf-8")) if body else {}
+                except Exception:
+                    body_json = None
+
+                if isinstance(body_json, dict):
+                    guardrails_enabled = bool(body_json.pop("guardrailsEnabled", False))
+
+                    if guardrails_enabled:
+                        messages = body_json.get("messages")
+                        user_message = None
+                        if isinstance(messages, list) and messages:
+                            for msg in reversed(messages):
+                                if isinstance(msg, dict) and msg.get("role") == "user":
+                                    user_message = msg.get("content")
+                                    break
+
+                        nemo_result = _nemo_input_check(user_message or "")
+                        blocked = _guardrails_block_message(user_message or "")
+                        if blocked or (isinstance(nemo_result, str) and nemo_result != ""):
+                            response_text = blocked if blocked else nemo_result
+                            def stream_blocked():
+                                try:
+                                    yield json.dumps({"id": request_id, "done": False}) + "\n"
+                                    yield (
+                                        json.dumps(
+                                            {
+                                                "model": body_json.get("model", ""),
+                                                "message": {"role": "assistant", "content": response_text},
+                                                "done": False,
+                                            }
+                                        )
+                                        + "\n"
+                                    )
+                                    yield json.dumps(
+                                        {
+                                            "model": body_json.get("model", ""),
+                                            "message": {"role": "assistant", "content": ""},
+                                            "done": True,
+                                        }
+                                    ) + "\n"
+                                finally:
+                                    if request_id in REQUEST_POOL:
+                                        REQUEST_POOL.remove(request_id)
+
+                            return StreamingResponse(
+                                stream_blocked(),
+                                status_code=200,
+                                media_type="text/event-stream",
+                            )
+
+                    body = json.dumps(body_json).encode("utf-8")
 
             def stream_content():
                 try:
@@ -115,9 +245,27 @@ async def proxy(path: str, request: Request, user=Depends(get_current_user)):
                 data=body,
                 headers=headers,
                 stream=True,
+                timeout=None if path in ["chat"] else 10,
             )
 
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                fallback = _maybe_fallback_ollama_base_url(app.state.OLLAMA_API_BASE_URL)
+                if fallback is not None:
+                    app.state.OLLAMA_API_BASE_URL = fallback
+                    target_url_retry = f"{app.state.OLLAMA_API_BASE_URL}/{path}"
+                    r = requests.request(
+                        method=request.method,
+                        url=target_url_retry,
+                        data=body,
+                        headers=headers,
+                        stream=True,
+                        timeout=None if path in ["chat"] else 10,
+                    )
+                    r.raise_for_status()
+                else:
+                    raise e
 
             # r.close()
 
@@ -132,7 +280,8 @@ async def proxy(path: str, request: Request, user=Depends(get_current_user)):
     try:
         return await run_in_threadpool(get_request)
     except Exception as e:
-        error_detail = "Ollama WebUI: Server Connection Error"
+        logger.exception("Ollama proxy error")
+        error_detail = f"Ollama WebUI: Server Connection Error ({e})"
         if r is not None:
             try:
                 res = r.json()

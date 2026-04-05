@@ -355,6 +355,7 @@
 		const [res, controller] = await generateChatCompletion(localStorage.token, {
 			model: model,
 			messages: messagesBody,
+			guardrailsEnabled: $settings?.guardrailsEnabled ?? false,
 			options: {
 				...($settings.options ?? {})
 			},

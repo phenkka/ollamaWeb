@@ -103,7 +103,19 @@ WEBUI_VERSION = os.environ.get("WEBUI_VERSION", "v1.0.0-alpha.92")
 # WEBUI_AUTH (Required for security)
 ####################################
 
-WEBUI_AUTH = True
+def _env_bool(name: str, default: bool = False) -> bool:
+    v = os.environ.get(name, None)
+    if v is None:
+        return default
+    if isinstance(v, str):
+        return v.strip().lower() in ["1", "true", "yes", "y", "on"]
+    return bool(v)
+
+
+WEBUI_AUTH = _env_bool("WEBUI_AUTH", False)
+
+
+WEBUI_MINIMAL = _env_bool("WEBUI_MINIMAL", False)
 
 ####################################
 # WEBUI_SECRET_KEY

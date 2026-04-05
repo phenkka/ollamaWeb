@@ -91,6 +91,16 @@ async def update_password(
 
 @router.post("/signin", response_model=SigninResponse)
 async def signin(form_data: SigninForm):
+    try:
+        password_bytes_len = (
+            len(form_data.password.encode("utf-8")) if isinstance(form_data.password, str) else -1
+        )
+        print(
+            f"Auth signin: password_type={type(form_data.password).__name__} password_bytes_len={password_bytes_len}"
+        )
+    except Exception:
+        print("Auth signin: failed to compute password length")
+
     user = Auths.authenticate_user(form_data.email.lower(), form_data.password)
     if user:
         token = create_token(data={"id": user.id})
@@ -115,6 +125,16 @@ async def signin(form_data: SigninForm):
 
 @router.post("/signup", response_model=SigninResponse)
 async def signup(request: Request, form_data: SignupForm):
+    try:
+        password_bytes_len = (
+            len(form_data.password.encode("utf-8")) if isinstance(form_data.password, str) else -1
+        )
+        print(
+            f"Auth signup: password_type={type(form_data.password).__name__} password_bytes_len={password_bytes_len}"
+        )
+    except Exception:
+        print("Auth signup: failed to compute password length")
+
     if not request.app.state.ENABLE_SIGNUP:
         raise HTTPException(400, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
 

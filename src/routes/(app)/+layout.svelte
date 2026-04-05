@@ -79,8 +79,19 @@
 
 	onMount(async () => {
 		if ($user === undefined) {
-			await goto('/auth');
-		} else if (['user', 'admin'].includes($user.role)) {
+			let retries = 20;
+			while (retries > 0 && $user === undefined) {
+				retries -= 1;
+				await new Promise((r) => setTimeout(r, 50));
+			}
+
+			if ($user === undefined) {
+				await goto('/auth');
+				return;
+			}
+		}
+
+		if (['user', 'admin'].includes($user.role)) {
 			try {
 				// Check if IndexedDB exists
 				DB = await openDB('Chats', 1);

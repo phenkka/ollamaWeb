@@ -34,3 +34,5 @@ PyJWT
 pyjwt[crypto]
 
 black
+
+nemoguardrails

@@ -13,6 +13,7 @@
 	let speechAutoSend = false;
 	let responseAutoCopy = false;
 	let titleAutoGenerateModel = '';
+	let guardrailsEnabled = false;
 
 	// Interface
 	let promptSuggestions = [];
@@ -20,6 +21,11 @@
 	const toggleSpeechAutoSend = async () => {
 		speechAutoSend = !speechAutoSend;
 		saveSettings({ speechAutoSend: speechAutoSend });
+	};
+
+	const toggleGuardrailsEnabled = async () => {
+		guardrailsEnabled = !guardrailsEnabled;
+		saveSettings({ guardrailsEnabled: guardrailsEnabled });
 	};
 
 	const toggleTitleAutoGenerate = async () => {
@@ -64,6 +70,7 @@
 		titleAutoGenerate = settings.titleAutoGenerate ?? true;
 		speechAutoSend = settings.speechAutoSend ?? false;
 		responseAutoCopy = settings.responseAutoCopy ?? false;
+		guardrailsEnabled = settings.guardrailsEnabled ?? false;
 
 		titleAutoGenerateModel = settings.titleAutoGenerateModel ?? '';
 	});
@@ -132,6 +139,26 @@
 						type="button"
 					>
 						{#if responseAutoCopy === true}
+							<span class="ml-2 self-center">On</span>
+						{:else}
+							<span class="ml-2 self-center">Off</span>
+						{/if}
+					</button>
+				</div>
+			</div>
+
+			<div>
+				<div class=" py-0.5 flex w-full justify-between">
+					<div class=" self-center text-xs font-medium">Guardrails (NeMo)</div>
+
+					<button
+						class="p-1 px-3 text-xs flex rounded transition"
+						on:click={() => {
+							toggleGuardrailsEnabled();
+						}}
+						type="button"
+					>
+						{#if guardrailsEnabled === true}
 							<span class="ml-2 self-center">On</span>
 						{:else}
 							<span class="ml-2 self-center">Off</span>

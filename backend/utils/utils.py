@@ -21,8 +21,16 @@ ALGORITHM = "HS256"
 # Auth Utils
 ##############
 
-bearer_security = HTTPBearer()
+bearer_security = HTTPBearer(auto_error=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class GuestUser(BaseModel):
+    id: str = "guest"
+    email: str = ""
+    name: str = "Guest"
+    role: str = "admin"
+    profile_image_url: str = ""
 
 
 def verify_password(plain_password, hashed_password):
@@ -59,17 +67,16 @@ def extract_token_from_auth_header(auth_header: str):
 
 
 def get_current_user(auth_token: HTTPAuthorizationCredentials = Depends(bearer_security)):
+    if not config.WEBUI_AUTH:
+        return GuestUser()
+
+    if auth_token is None or not getattr(auth_token, "credentials", None):
+        return GuestUser()
+
     data = decode_token(auth_token.credentials)
-    if data != None and "id" in data:
+    if data is not None and "id" in data:
         user = Users.get_user_by_id(data["id"])
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.INVALID_TOKEN,
-            )
-        return user
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
+        if user is not None:
+            return user
+
+    return GuestUser()

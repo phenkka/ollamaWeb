@@ -11,7 +11,7 @@ from apps.web.routers import (
     configs,
     utils,
 )
-from config import WEBUI_VERSION, WEBUI_AUTH, DEFAULT_MODELS, DEFAULT_PROMPT_SUGGESTIONS
+from config import WEBUI_VERSION, WEBUI_AUTH, WEBUI_MINIMAL, DEFAULT_MODELS, DEFAULT_PROMPT_SUGGESTIONS
 
 app = FastAPI()
 
@@ -46,6 +46,7 @@ async def get_status():
         "status": True,
         "version": WEBUI_VERSION,
         "auth": WEBUI_AUTH,
+        "minimal": WEBUI_MINIMAL,
         "default_models": app.state.DEFAULT_MODELS,
         "default_prompt_suggestions": app.state.DEFAULT_PROMPT_SUGGESTIONS,
     }

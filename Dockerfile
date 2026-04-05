@@ -9,7 +9,7 @@ RUN wget "https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.
     tar -xzf - -C /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 RUN npm run build
@@ -31,6 +31,11 @@ WORKDIR /app/backend
 
 # install python dependencies
 COPY ./backend/requirements.txt ./requirements.txt
+
+# build tools required for some python packages (e.g. annoy)
+RUN apt-get update \
+    && apt-get install -y g++ build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 RUN pip3 install -r requirements.txt --no-cache-dir

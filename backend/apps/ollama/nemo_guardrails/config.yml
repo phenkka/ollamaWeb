@@ -1,0 +1,9 @@
+models:
+  - type: main
+    engine: ollama
+    model: smollm:135m
+
+rails:
+  input:
+    flows:
+      - jailbreak_or_policy_bypass_check
