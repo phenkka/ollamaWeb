@@ -6,6 +6,8 @@ node_modules
 .env
 .env.*
 !.env.example
+!.env.local.example
+!.env.docker.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 # Byte-compiled / optimized / DLL files
@@ -298,3 +300,5 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+.idea
