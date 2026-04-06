@@ -7,3 +7,4 @@ rails:
   input:
     flows:
       - jailbreak_or_policy_bypass_check
+      - self_check_input
